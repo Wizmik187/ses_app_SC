@@ -222,19 +222,6 @@
       <configuration Name="Debug" build_exclude_from_build="Yes" />
       <configuration Name="Release" build_exclude_from_build="Yes" />
     </folder>
-    <folder Name="Syntiant">
-      <file file_name="$(SYNTIANT_DIR)/src/checksum.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/fixedpt.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/fixedpt.h" />
-      <file file_name="$(SYNTIANT_DIR)/src/snprintf.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_ndp.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_ndp_error.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_ndp10x.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_ndp10x_micro.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_ndp10x_package_parser.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_package.c" />
-      <file file_name="$(SYNTIANT_DIR)/src/syntiant_portability.c" />
-    </folder>
     <folder Name="FreeRTOS">
       <folder Name="Source">
         <folder Name="portable">
