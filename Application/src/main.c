@@ -64,32 +64,16 @@ void twi_event_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
     }
 }
 
-void da7280_irq_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+#ifndef ADS1115_USE_DELAY
+void ads1115_irq_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
     BaseType_t checkIfYieldRequired;
-    checkIfYieldRequired = xTaskResumeFromISR(haptic_manager_Handle);
+    checkIfYieldRequired = xTaskResumeFromISR(debug_mode_Handle);
     portYIELD_FROM_ISR(checkIfYieldRequired);
 }
+#endif
 
-void bq25150_irq_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
-{
-    BaseType_t checkIfYieldRequired;
-    checkIfYieldRequired = xTaskResumeFromISR(pwr_btn_manager_Handle);
-    portYIELD_FROM_ISR(checkIfYieldRequired);
-}
-
-void ndp_irq_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
-{
-    BaseType_t checkIfYieldRequired;
-    checkIfYieldRequired = xTaskResumeFromISR(hear_something_Handle);
-    portYIELD_FROM_ISR(checkIfYieldRequired);
-}
-
-static void hear_something(void * pvParameter);
 static void debug_mode(void * pvParameter);
-static void pwr_btn_manager(void * pvParameter);
-static void haptic_manager(void * pvParameter);
-
 static void gpio_init(void);
 
 /**@brief Function for initializing the nrf log module.
@@ -113,7 +97,7 @@ void vApplicationIdleHook( void )
 }
 
 int main(void)
-{
+ {
     ret_code_t err_code;
     /* Initialize clock driver for better time accuracy in FREERTOS */
     err_code = nrf_drv_clock_init();
@@ -122,6 +106,7 @@ int main(void)
     APP_ERROR_CHECK(err_code);
     log_init();
     gpio_init();
+    ads1115_init();
 
 #if NRF_LOG_ENABLED
     // Start execution.
@@ -150,18 +135,32 @@ int main(void)
 }
 
 
-
-
 static void debug_mode(void * pvParameter)
 {
 
-   
+    uint16_t val;
+
+#ifndef ADS1115_USE_DELAY
+    nrf_drv_gpiote_in_event_enable(ADS1115_IRQ_PIN, true);
+#endif
     while (1)
     {
-        NRF_LOG_INFO("Hello World!");
-        nrf_gpio_pin_toggle(LED_1);
-        vTaskDelay(1000);
+
+        ads1115_get_adc_result(&ads1115_state, ADS1115_AIN0, ADS1115_DEFAULT_PGA, ADS1115_DEFAULT_DATA_RATE, &val);
+        ads1115_get_adc_result(&ads1115_state, ADS1115_AIN1, ADS1115_DEFAULT_PGA, ADS1115_DEFAULT_DATA_RATE, &val);
+        ads1115_get_adc_result(&ads1115_state, ADS1115_AIN2, ADS1115_DEFAULT_PGA, ADS1115_DEFAULT_DATA_RATE, &val);
+        ads1115_get_adc_result(&ads1115_state, ADS1115_AIN3, ADS1115_DEFAULT_PGA, ADS1115_DEFAULT_DATA_RATE, &val);
+
+        NRF_LOG_RAW_INFO("%d, %d, %d, %d\r", ads1115_state.se_channel_data[ADS1115_AIN0].val, 
+                                             ads1115_state.se_channel_data[ADS1115_AIN1].val, 
+                                             ads1115_state.se_channel_data[ADS1115_AIN2].val,
+                                             ads1115_state.se_channel_data[ADS1115_AIN3].val);
+
     }
+
+#ifndef ADS1115_USE_DELAY
+    nrf_drv_gpiote_in_event_disable(ADS1115_IRQ_PIN);
+#endif
 }
 
 
@@ -169,27 +168,17 @@ static void gpio_init(void)
 {
     ret_code_t err_code;
 
-    //nrf_drv_spi_config_t spi2_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    //spi2_config.ss_pin   = SPIM2_SS_PIN;
-    //spi2_config.miso_pin = SPIM2_MISO_PIN;
-    //spi2_config.mosi_pin = SPIM2_MOSI_PIN;
-    //spi2_config.sck_pin  = SPIM2_SCK_PIN;
-    //spi2_config.frequency = NRF_DRV_SPI_FREQ_4M;
+    const nrf_drv_twi_config_t twi0_config = {
+       .scl                = TWI0_SCL_PIN,
+       .sda                = TWI0_SDA_PIN,
+       .frequency          = NRF_DRV_TWI_FREQ_400K,
+       .interrupt_priority = APP_IRQ_PRIORITY_LOWEST,
+       .clear_bus_init     = false
+    };
 
-    //APP_ERROR_CHECK(nrf_drv_spi_init(&spi2, &spi2_config, spi_event_handler, NULL));
-
-
-    //const nrf_drv_twi_config_t twi0_config = {
-    //   .scl                = TWI0_SCL_PIN,
-    //   .sda                = TWI0_SDA_PIN,
-    //   .frequency          = NRF_DRV_TWI_FREQ_400K,
-    //   .interrupt_priority = APP_IRQ_PRIORITY_LOWEST,
-    //   .clear_bus_init     = false
-    //};
-
-    //err_code = nrf_drv_twi_init(&twi0, &twi0_config, twi_event_handler, NULL);
-    //APP_ERROR_CHECK(err_code);
-    //nrf_drv_twi_enable(&twi0);
+    err_code = nrf_drv_twi_init(&twi0, &twi0_config, twi_event_handler, NULL);
+    APP_ERROR_CHECK(err_code);
+    nrf_drv_twi_enable(&twi0);
     
     nrf_gpio_cfg_output(LED_1);
     nrf_gpio_cfg_output(LED_2);
@@ -202,6 +191,13 @@ static void gpio_init(void)
 
     err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
+
+#ifndef ADS1115_USE_DELAY
+    nrf_drv_gpiote_in_config_t ads1115_irq_config = NRFX_GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
+    ads1115_irq_config.pull = NRF_GPIO_PIN_PULLUP;
+    err_code = nrf_drv_gpiote_in_init(ADS1115_IRQ_PIN, &ads1115_irq_config, ads1115_irq_handler);
+    APP_ERROR_CHECK(err_code);
+#endif
     
 }
 
